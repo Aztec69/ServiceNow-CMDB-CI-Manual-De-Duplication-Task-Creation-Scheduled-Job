@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="2025-12-05 16:24:25">
+<sys_script_include action="INSERT_OR_UPDATE">
+<access>public</access>
+<active>true</active>
+<api_name>global.CMDBDuplicateTaskUtils</api_name>
+<caller_access/>
+<client_callable>false</client_callable>
+<description>Utility class to manually create Remediate Duplicate Task with duplicates that are of independent type</description>
+<mobile_callable>false</mobile_callable>
+<name>CMDBDuplicateTaskUtils</name>
+<sandbox_callable>false</sandbox_callable>
+<script><![CDATA[var CMDBDuplicateTaskUtils = Class.create();
+CMDBDuplicateTaskUtils.prototype = {
+    initialize: function() {
+        this.cmdbCiTable = "cmdb_ci";
+        this.duplicateAuditResultTable = 'duplicate_audit_result';
+        this.duplicateTaskTable = 'reconcile_duplicate_task';
+        this.failureLabel = "Failed to create Remediate Duplicate Task. ";
+        this.successLabel = "Successfully created Remediate Duplicate Task.";
+    },
+
+    // Create Remediate Duplicate Task for given list of duplicate sysIds
+    // MODIFICATION: Added taskPayload argument
+    createDuplicateTask : function(duplicateSysIds, taskPayload) { 
+        if (GlideStringUtil.nil(duplicateSysIds)) {
+            gs.info(gs.getMessage("Failed to create Remediate Duplicate Task. Invalid input."));
+            return null;
+        }
+
+        var sysIDs = duplicateSysIds.split(",");
+        // validate sysId is valid cmdb_ci and not present in any open de-duplicate tasks
+        for(var i=0; i < sysIDs.length; i++) {
+            sysIDs[i] = sysIDs[i].trim();
+            if(!this.isValidCmdbCi(sysIDs[i])) {
+                gs.info(gs.getMessage("Failed to create Remediate Duplicate Task. Following sysId is not a valid sysId in cmdb_ci table: {0}", sysIDs[i]));
+                return null;
+            }
+
+            if(!this.hasNoOpenDuplicateTasks(sysIDs[i])) {
+                gs.info(gs.getMessage("Failed to create Remediate Duplicate Task. Following sysId is already part of an open Remediate Duplicate Task: {0}", sysIDs[i]));
+                return null;
+            }
+        }
+
+        // Create Remediate Duplicate Task
+        var taskGr = new GlideRecord(this.duplicateTaskTable);
+        taskGr.initialize();
+        
+        // MODIFICATION: Check for and set custom short description from payload
+        if (taskPayload && taskPayload.short_description) {
+            taskGr.setValue('short_description', taskPayload.short_description);
+        } else {
+            // Revert to default if no custom value is provided
+            taskGr.setValue('short_description', 'Manually found duplicate records');
+        }
+        
+        var taskId = taskGr.insert();
+        
+        for(var j=0; j < sysIDs.length; j++) {
+            // Create duplicate audit results
+            var grR = new GlideRecord(this.duplicateAuditResultTable);
+            grR.initialize();
+            grR.setValue("table", this.cmdbCiTable);
+            grR.setValue("duplicate_ci", sysIDs[j]);
+            grR.setValue("duplicate_id", sysIDs[j]);
+            grR.setValue("follow_on_task", taskId);
+            grR.update();
+        }
+
+        return taskId;
+    },
+
+    // Check if sysId is a valid cmdb_ci
+    isValidCmdbCi : function(sysId) {
+        var gr = new GlideRecord("cmdb_ci");
+        return gr.get(sysId);
+    },
+
+    // Check if sysId already exist in open de-duplicate task
+    hasNoOpenDuplicateTasks : function(sysId) {
+        var gr = new GlideRecord(this.duplicateAuditResultTable);
+        gr.addQuery("duplicate_id", sysId);
+        gr.query();
+        while(gr.next()) {
+            var activeTask = gr.follow_on_task.active;
+            if (activeTask)
+                return false;
+        }
+        return true;
+    },
+
+    getIdentificationRules: function(table) {
+        return SNC.CmdbMetadataScriptableApi.getIdentificationRules(table);
+    },
+
+    type: 'CMDBDuplicateTaskUtils'
+};]]></script>
+<sys_class_name>sys_script_include</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2018-01-31 23:51:27</sys_created_on>
+<sys_id>5489e330eb8813007c94efc9a206fe1e</sys_id>
+<sys_mod_count>12</sys_mod_count>
+<sys_name>CMDBDuplicateTaskUtils</sys_name>
+<sys_package display_value="Configuration Management (CMDB)" source="com.snc.cmdb">075bd101f46322104f3475eb2440bcf5</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sys_script_include_5489e330eb8813007c94efc9a206fe1e</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2025-12-05 16:22:32</sys_updated_on>
+</sys_script_include>
+</unload>
