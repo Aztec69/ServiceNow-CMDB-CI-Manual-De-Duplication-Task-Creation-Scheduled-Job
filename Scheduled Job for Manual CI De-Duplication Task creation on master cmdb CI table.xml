@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="2025-12-05 15:52:24">
+<sysauto_script action="INSERT_OR_UPDATE">
+<active>true</active>
+<business_calendar display_value=""/>
+<condition/>
+<conditional>false</conditional>
+<entered_time>1970-01-01 00:00:00</entered_time>
+<max_drift/>
+<name>Manual De-Duplication Job for Master</name>
+<offset/>
+<offset_type>0</offset_type>
+<run_as display_value="System Administrator">6816f79cc0a8016401c5a33be04be441</run_as>
+<run_as_tz/>
+<run_dayofmonth>1</run_dayofmonth>
+<run_dayofweek>1</run_dayofweek>
+<run_period/>
+<run_start>2025-12-05 15:32:10</run_start>
+<run_time>1970-01-01 08:00:00</run_time>
+<run_type>on_demand</run_type>
+<script><![CDATA[(function executeScheduledJob() {
+    // Set the base class to search for duplicates across all CI types
+    var baseClassName = 'cmdb_ci';
+    var identifierAttr = 'name';
+
+    // Step 1: Find duplicate names across the base class (cmdb_ci)
+    // We group by both 'name' (identifierAttr) and 'sys_class_name'
+    var agg = new GlideAggregate(baseClassName);
+    agg.addAggregate('COUNT', identifierAttr);
+    agg.groupBy(identifierAttr);
+    agg.groupBy('sys_class_name'); // Group by the actual CI class name
+    agg.addHaving('COUNT', '>', 1);
+    agg.query();
+
+    var dupTaskUtil = new CMDBDuplicateTaskUtils();
+    var createdTasks = [];
+
+    while (agg.next()) {
+        var nameValue = agg.getValue(identifierAttr);
+        var actualClassName = agg.getValue('sys_class_name');
+        var duplicateCount = agg.getAggregate('COUNT', identifierAttr); // Get the count of duplicates for this name/class combo
+
+        // Step 2: Get the display name of the actual CI class (e.g., 'Linux Server')
+        var classDisplayName = new GlideRecord(actualClassName).getClassDisplayValue();
+
+        // Step 3: Get all CIs with this duplicate name AND this specific class
+        var ciGR = new GlideRecord(actualClassName);
+        ciGR.addQuery(identifierAttr, nameValue);
+        // Important: Add query for the sys_class_name explicitly to be safe, though querying the specific class table is usually sufficient.
+        ciGR.addQuery('sys_class_name', actualClassName); 
+        ciGR.query();
+
+        var sysIds = [];
+        while (ciGR.next()) {
+            sysIds.push(ciGR.getUniqueValue());
+        }
+
+        // Step 4: Create duplicate task if more than one CI found
+        if (sysIds.length > 1) {
+            // Construct the desired short description using the class display name
+            var shortDesc = 'Manually found duplicate CI: ' + nameValue + ', for class: ' + classDisplayName + ' (' + actualClassName + ')' + ' with duplicate count: ' + duplicateCount;
+
+            // Create the payload object with the custom short description
+            var payload = {
+                'short_description': shortDesc
+            };
+
+            // Call createDuplicateTask
+            var taskSysId = dupTaskUtil.createDuplicateTask(sysIds.join(','), payload);
+            createdTasks.push(taskSysId);
+            gs.info('Created duplicate task: ' + taskSysId + ' for name: ' + nameValue + ' in class: ' + actualClassName);
+        }
+    }
+
+    // Log created tasks
+    if (createdTasks.length > 0) {
+        gs.info('Duplicate tasks created. Total tasks: ' + createdTasks.length + '. Tasks: ' + createdTasks.join(', '));
+    } else {
+        gs.info('No duplicate CIs found across the base class ' + baseClassName);
+    }
+})();]]></script>
+<sys_class_name>sysauto_script</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2025-12-05 15:33:37</sys_created_on>
+<sys_id>7721d88b83613210bb6056e0deaad3f9</sys_id>
+<sys_mod_count>0</sys_mod_count>
+<sys_name>Manual De-Duplication Job for Master</sys_name>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sysauto_script_7721d88b83613210bb6056e0deaad3f9</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2025-12-05 15:33:37</sys_updated_on>
+<time_zone/>
+<upgrade_safe>false</upgrade_safe>
+</sysauto_script>
+</unload>

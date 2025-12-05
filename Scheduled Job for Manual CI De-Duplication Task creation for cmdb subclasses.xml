@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<unload unload_date="2025-12-05 15:54:38">
+<sysauto_script action="INSERT_OR_UPDATE">
+<active>true</active>
+<business_calendar display_value=""/>
+<condition/>
+<conditional>false</conditional>
+<entered_time>1970-01-01 00:00:00</entered_time>
+<max_drift/>
+<name>Manually Created De-Duplication Task 2</name>
+<offset/>
+<offset_type>0</offset_type>
+<run_as display_value="System Administrator">6816f79cc0a8016401c5a33be04be441</run_as>
+<run_as_tz/>
+<run_dayofmonth>1</run_dayofmonth>
+<run_dayofweek>1</run_dayofweek>
+<run_period/>
+<run_start>2025-12-05 13:57:28</run_start>
+<run_time>1970-01-01 08:00:00</run_time>
+<run_type>on_demand</run_type>
+<script><![CDATA[(function executeScheduledJob() {
+    var className = 'cmdb_ci_computer';
+    var identifierAttr = 'name';
+
+    // Step 1: Find duplicate names
+    var agg = new GlideAggregate(className);
+    agg.addAggregate('COUNT', identifierAttr);
+    agg.addHaving('COUNT', '>', 1);
+    agg.query();
+
+    var dupTaskUtil = new CMDBDuplicateTaskUtils();
+    var createdTasks = [];
+
+    while (agg.next()) {
+        var nameValue = agg.getValue(identifierAttr);
+        var duplicateCount = agg.getAggregate('COUNT', identifierAttr); // Get the count of duplicates
+
+        // Step 2: Get all CIs with this duplicate name
+        var ciGR = new GlideRecord(className);
+        ciGR.addQuery(identifierAttr, nameValue);
+        ciGR.query();
+
+        var sysIds = [];
+        while (ciGR.next()) {
+            sysIds.push(ciGR.getUniqueValue());
+        }
+
+        // Step 3: Create duplicate task if more than one CI found
+        if (sysIds.length > 1) {
+            // **New:** Construct the desired short description
+            var shortDesc = 'Manually found duplicate CI: ' + nameValue + ', for class: ' + className + ' with duplicate count: ' + duplicateCount;
+
+            // **New:** Create the payload object with the custom short description
+            var payload = {
+                'short_description': shortDesc
+            };
+
+            // **Modification:** Call createDuplicateTask with the sys IDs and the new payload
+            var taskSysId = dupTaskUtil.createDuplicateTask(sysIds.join(','), payload);
+            createdTasks.push(taskSysId);
+        }
+    }
+
+    // Log created tasks
+    if (createdTasks.length > 0) {
+        gs.info('Duplicate tasks created for class: ' + className + '. Tasks: ' + createdTasks.join(', '));
+    } else {
+        gs.info('No duplicate CIs found ');
+    }
+})();]]></script>
+<sys_class_name>sysauto_script</sys_class_name>
+<sys_created_by>admin</sys_created_by>
+<sys_created_on>2025-12-05 13:58:02</sys_created_on>
+<sys_id>e88b3f3a83213210bb6056e0deaad3cb</sys_id>
+<sys_mod_count>1</sys_mod_count>
+<sys_name>Manually Created De-Duplication Task 2</sys_name>
+<sys_package display_value="Global" source="global">global</sys_package>
+<sys_policy/>
+<sys_scope display_value="Global">global</sys_scope>
+<sys_update_name>sysauto_script_e88b3f3a83213210bb6056e0deaad3cb</sys_update_name>
+<sys_updated_by>admin</sys_updated_by>
+<sys_updated_on>2025-12-05 14:44:07</sys_updated_on>
+<time_zone/>
+<upgrade_safe>false</upgrade_safe>
+</sysauto_script>
+</unload>
